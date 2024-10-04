@@ -9,7 +9,6 @@ DATASEG
 	tens DW 1, 10, 100, 1000, 10000
 	FPUIN DD 0
 	FPUOUT DD 0
-	asdf DD 50.3
 CODESEG
 
 	; input: di = offset of leftmost digit in string
@@ -102,7 +101,6 @@ start:
 	int 21h
 
 	mov bx, offset buffer
-	fld [asdf]
 	call str2float
 exit:
 	mov ax, 4c00h     

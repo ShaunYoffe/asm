@@ -1,3 +1,6 @@
+; TODO: if an integer is supplied, ie "21" (with no dot), finddot enters infinite loop and str2float outputs huge value
+
+
 IDEAL
 MODEL small
 P386
@@ -53,6 +56,7 @@ CODESEG
 	endp
 
 	; input: bx = string offset
+	; input: dl = length to convert
 	; destroys: ax, bx, cx, dx, di, si
 	; uses 2 FPU registers
 	; output: st(0) = value
@@ -60,18 +64,21 @@ CODESEG
 		call finddot          ; offset buffer + si = dot address
 		mov di, offset buffer
 		mov cx, si
+		xor dh, dh
+		push dx
 		push cx
+		xor dx, dx
 		call str2int
 		mov ax, dx
 	
 		pop cx                 ; preserve dot offset
+		pop dx                 ; preserve target length
 		mov di, offset buffer 
 		add di, cx             
 		inc di                 ; di = dot address + 1
 		neg cx
-		add cl, [byte offset count]
-		adc ch, 0
-		dec cl                 ; cl = number of digits to convert
+		add cx, dx
+		dec cx                 ; cl = number of digits to convert
 		xor dx, dx
 		push cx
 		push ax
@@ -101,6 +108,8 @@ start:
 	int 21h
 
 	mov bx, offset buffer
+	mov dl, [byte count]
+	xor dh, dh
 	call str2float
 exit:
 	mov ax, 4c00h     

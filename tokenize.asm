@@ -1,3 +1,4 @@
+; REMINDER: for 7.2-9.6, it works fine until the minus, then str2float outputs 7.2 again for some reason
 IDEAL
 MODEL small
 P386
@@ -11,11 +12,11 @@ DATASEG
 
 	FPUIN DD 0
 
-	tokencount DB 0Dh
-	tokens DW 255 dup (?)
+	tokencount DB 0
+	tokens DW 255 dup (0)
 
 	floatcount DB 0
-	floatstore DQ 256 dup (?)
+	floats DQ 256 dup (0)
 CODESEG
 
 	; input: di = offset of leftmost digit in string
@@ -60,6 +61,7 @@ CODESEG
 	endp
 
 	; input: bx = string offset
+	; input: dl = length to convert
 	; destroys: ax, bx, cx, dx, di, si
 	; uses 2 FPU registers
 	; output: st(0) = value
@@ -67,18 +69,21 @@ CODESEG
 		call finddot          ; offset buffer + si = dot address
 		mov di, offset buffer
 		mov cx, si
+		xor dh, dh
+		push dx
 		push cx
+		xor dx, dx
 		call str2int
 		mov ax, dx
 	
 		pop cx                 ; preserve dot offset
+		pop dx                 ; preserve target length
 		mov di, offset buffer 
 		add di, cx             
 		inc di                 ; di = dot address + 1
 		neg cx
-		add cl, [byte offset count]
-		adc ch, 0
-		dec cl                 ; cl = number of digits to convert
+		add cx, dx
+		dec cx                 ; cl = number of digits to convert
 		xor dx, dx
 		push cx
 		push ax
@@ -99,48 +104,92 @@ CODESEG
 		ret
 	endp
 
-	; input: bx = string start offset
-	; input di = offset into tokens buffer to write to
-	; input cl = length
-	; destroys: 
+	; input: dx = token word
+	; output = adds token to tokens buffer
+	; destroys: bx
+	proc addtoken
+		xor bh, bh
+		mov bl, [tokencount]
+		shl bx, 1
+		add bx, offset tokens
+		mov [word bx], dx
+		inc [tokencount]
+		ret
+	endp
+
+	; input: si = string (0Dh terminated) start pointer
+	; destroys: si, di, bx, dx
 	; output: tokens
 	proc tokenize
-		xor ch, ch
-		mov bx, bx
-		xor dh, dh
-		loopoverstring:
-			
-			add bl, ch
-			adc bx, 0
-			mov dl, [byte si]
+		cmp [byte si], 0Dh
+		jne notover
+		ret                ; base case, string IS terminator
 
-			cmp dl, "+"
-			je symbol
-			cmp dl, "-"
-			je symbol
-			cmp dl, "*"
-			je symbol
-			cmp dl, "/"
-			je symbol
-			cmp dl, "^"
-			je symbol
-			cmp dl, "("
-			je symbol
-			cmp dl, ")"
-			je symbol
-
-			jmp number
-
-			symbol:
-				xchg bx, si
-				cmp [byte si], "x"
-				xchg si, bx
-				
+		notover:
+		mov di, si
+		findsymbol:
+			cmp [byte di], 0Dh ; in case string has no symbols, ie function is a constant / identity
+			je symbolfound     ; idk man
+			cmp [byte di], "+"
+			je symbolfound
+			cmp [byte di], "-"
+			je symbolfound
+			cmp [byte di], "*"
+			je symbolfound
+			cmp [byte di], "/"
+			je symbolfound
+			cmp [byte di], "^"
+			je symbolfound
 
 
-				number:
-		cmp ch, cl
-		jne loopoverstring
+			inc di
+		jmp findsymbol
+
+		symbolfound:
+			cmp di, si
+			je addsymbol
+
+			cmp [byte si], "x"
+			jne number
+			x:
+				mov dx, 1000000010000000b    ; code for x
+				call addtoken
+
+			number:
+				mov dx, di  ;si pointing at start of number
+				sub dx, si  ;di pointing at symbol
+				mov bx, si
+
+				push di
+				call str2float  ;does not support ints lol
+				pop di
+
+				xor bh, bh
+				mov bl, [floatcount]
+				shl bx, 3
+				add bx, offset floats
+				fstp [qword bx]
+				inc [floatcount]
+
+				sub bx, offset floats
+				shr bx, 3
+				mov dl, bl           ; dl = offset into floats buffer (/8, each float is qword)
+				mov dh, 00000001b	 ; code for value
+				call addtoken
+
+
+			addsymbol:  ;+-*/^
+				cmp [byte di], 0Dh
+				je nomore
+				mov dh, 10000001b
+				mov dl, [byte di]
+				call addtoken
+
+
+		mov si, di
+		inc si
+		call tokenize
+		nomore:
 		ret
 	endp
 start:
@@ -151,14 +200,10 @@ start:
 	mov ah, 0Ah
 	int 21h
 
-	mov cl, [byte offset count]
 	mov si, offset buffer
-	mov di, offset tokens
-	mov [byte offset count], 0Dh
 	call tokenize
-	; fstp [qword offset floatstore + 8]
 exit:
-	mov ax, 4c00h     
+	mov ax, 4c00h
 	int 21h
 END start  
 
@@ -167,5 +212,5 @@ END start
 
 ; example:
 ; 10000001:2D (symbol:minus) S=1 P=0
-; 00000001:02 (value:offset into floatstore) S=0 P=0
+; 00000001:02 (value:offset into floats) S=0 P=0
 ; 10000000:10000000 (x:x)	S=1 P=1

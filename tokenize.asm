@@ -1,4 +1,3 @@
-; REMINDER: for 7.2-9.6, it works fine until the minus, then str2float outputs 7.2 again for some reason
 IDEAL
 MODEL small
 P386
@@ -67,9 +66,10 @@ CODESEG
 	; output: st(0) = value
 	proc str2float
 		call finddot          ; offset buffer + si = dot address
-		mov di, offset buffer
+		mov di, bx
 		mov cx, si
 		xor dh, dh
+		push bx
 		push dx
 		push cx
 		xor dx, dx
@@ -78,7 +78,8 @@ CODESEG
 	
 		pop cx                 ; preserve dot offset
 		pop dx                 ; preserve target length
-		mov di, offset buffer 
+		pop bx
+		mov di, bx
 		add di, cx             
 		inc di                 ; di = dot address + 1
 		neg cx

@@ -62,18 +62,20 @@ CODESEG
 	; output: st(0) = value
 	proc str2float
 		call finddot          ; offset buffer + si = dot address
-		mov di, offset buffer
+		mov di, bx
 		mov cx, si
 		xor dh, dh
 		push dx
 		push cx
+		push bx
 		xor dx, dx
 		call str2int
 		mov ax, dx
-	
+
+		pop bx
 		pop cx                 ; preserve dot offset
 		pop dx                 ; preserve target length
-		mov di, offset buffer 
+		mov di, bx
 		add di, cx             
 		inc di                 ; di = dot address + 1
 		neg cx

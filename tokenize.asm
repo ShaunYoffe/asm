@@ -72,7 +72,7 @@ CODESEG
 		push bx
 		push dx
 		push cx
-		xor dx, dx
+		xor dx, dx   ;str2int ADDS to dx, so needs to be zero
 		call str2int
 		mov ax, dx
 	
@@ -155,6 +155,7 @@ CODESEG
 			x:
 				mov dx, 1000000010000000b    ; code for x
 				call addtoken
+				jmp addsymbol
 
 			number:
 				mov dx, di  ;si pointing at start of number

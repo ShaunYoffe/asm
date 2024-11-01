@@ -42,16 +42,27 @@ CODESEG
 	endp
 
 	; input: bx = offset of string start
-	; destroys: flags
-	; output: si = offset of dot INSIDE string offset
+	; input: dl = length of string to convert (minimum 3)
+	; destroys: flags, dh
+	; output: si = offset of dot INSIDE string offset, FFFF if no dot was found
 	proc finddot
 		xor si, si
+		xor dh, dh
+		sub dl, 2
 		check:
 			cmp [byte bx + si], '.'
-			je found
+			je founddot
+
+			cmp si, dx
+			jae didntfinddot
+
 			inc si
 			jmp check
-		found:
+
+		didntfinddot:
+		mov si, 0FFFFh
+		founddot:
+		add dl, 2
 		ret
 	endp
 
@@ -61,13 +72,19 @@ CODESEG
 	; uses 2 FPU registers
 	; output: st(0) = value
 	proc str2float
+		xor dh, dh
 		call finddot          ; offset buffer + si = dot address
 		mov di, bx
 		mov cx, si
-		xor dh, dh
 		push dx
 		push cx
 		push bx
+
+		cmp cx, 0FFFFh
+		jne dotwasfound
+		mov cx, dx
+
+		dotwasfound:
 		xor dx, dx
 		call str2int
 		mov ax, dx
@@ -75,6 +92,14 @@ CODESEG
 		pop bx
 		pop cx                 ; preserve dot offset
 		pop dx                 ; preserve target length
+
+		cmp cx, 0FFFFh
+		jne isfloat
+		mov [word offset FPUIN], ax
+		fild [dword offset FPUIN]
+		jmp dotdone
+
+		isfloat:
 		mov di, bx
 		add di, cx             
 		inc di                 ; di = dot address + 1
@@ -86,8 +111,8 @@ CODESEG
 		push ax
 		call str2int
 		pop ax
-		pop di
-		add di, di
+		pop di					; di = number of digits to convert
+		shl di, 1				; tens is words
 		mov [word offset FPUIN], dx
 		fild [word offset FPUIN]
 		mov di, [tens + di]
@@ -98,8 +123,11 @@ CODESEG
 		fild [dword offset FPUIN]
 		fxch st(1)
 		faddp st(1), st
+
+		dotdone:
 		ret
 	endp
+
 start:
 	mov ax, @data
 	mov ds, ax
